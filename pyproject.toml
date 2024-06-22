@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "noip-renew"
+version = "0.1.0"
+description = "A no-ip automatic renewal script"
+authors = ["Gattes <gattes@tutamail.com>"]
+license = "GNU GPLv3"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pyotp = "^2.9.0"
+selenium = "^4.21.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
