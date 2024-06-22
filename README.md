@@ -1,4 +1,4 @@
-# Script to auto renew/confirm noip.com free hosts
+# no-ip renewal
 
 [noip.com](https://www.noip.com/) free hosts expire every month (every 30 days to be exact). This script checks the website to renew the hosts, using Python/Selenium with Chrome headless mode.
 
