@@ -3,7 +3,7 @@ import os
 import sys
 import logging
 
-from constants import DYNAMIC_HOSTS_URL, LOGIN_URL, SCREENSHOTS_PATH, USER_AGENT
+from constants import LOGIN_URL, SCREENSHOTS_PATH, USER_AGENT
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
@@ -154,7 +154,6 @@ class NoIPRobot:
         confirmation_button.click()
 
     def update_hosts(self):
-        self.browser.get(DYNAMIC_HOSTS_URL)
         dynamic_dns_list = WebDriverWait(self.browser, 10).until(
             EC.presence_of_element_located(
                 (By.XPATH, "//a[text()='Dynamic DNS Hostnames']")
