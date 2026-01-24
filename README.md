@@ -2,18 +2,18 @@
 
 [noip.com](https://www.noip.com/) free hosts expire every month (every 30 days to be exact). This script checks the website to renew the hosts, using Python/Selenium with Chrome headless mode.
 
-Based originally in [noip-renew](https://github.com/loblab/noip-renew) and made some minor improvements (improved logging, adding types, better docs).
+Based originally in [noip-renew](https://github.com/loblab/noip-renew) and made some minor improvements (improved logging, stronger typing, better docs) and updated to fit NO-IP latest UI changes.
 
 ## Prerequisites
 
 - Have a no-ip account with DNS already setup (how you maintain the IPs pointing to the records is up to you).
-- Your account must be secured with 2FA/TOTP, else no-ip will send a one-time code to your email and this script does not manage that.
-- Python >= 3.10
+- Your account must be secured with 2FA/TOTP, else no-ip will send a one-time code to your email and this script does not manage that (nor it is its intention)
+- Python >= 3.12
 
 ## Usage
 
 1. Clone this repository
-2. Install the pip lib:
+2. Install the libs:
 
 ```shell
 % pip install -r requirements.txt
@@ -22,33 +22,36 @@ Based originally in [noip-renew](https://github.com/loblab/noip-renew) and made 
 3. Run the command:
 
 ```shell
-% python3 noip-renew.py -h
+python noip-renew.py  -h
 usage: noip DDNS auto renewer [-h] -u USERNAME -p PASSWORD -s TOTP_SECRET [-t HTTPS_PROXY] [-d DEBUG]
-
-Renews each of the no-ip DDNS hosts that are below 7 days to expire period
 
 options:
   -h, --help            show this help message and exit
-  -u USERNAME, --username USERNAME
-  -p PASSWORD, --password PASSWORD
-  -s TOTP_SECRET, --totp-secret TOTP_SECRET
-  -t HTTPS_PROXY, --https-proxy HTTPS_PROXY
-  -d DEBUG, --debug DEBUG
+  -u, --username USERNAME
+  -p, --password PASSWORD
+  -s, --totp-secret TOTP_SECRET
+  -t, --https-proxy HTTPS_PROXY
+  -d, --debug DEBUG
 ```
+
+### Note
+
+You can use either a TOTP secret (6-digit number) or the PRIV Key from the 2FA
 
 ## Usage with Docker
 
-1. First, build the container image:
+1. Build the container image:
+
 ```shell
 % docker build -t noip-renewer:latest .
 ```
 
-2. Then run it:
+2. Run it:
 
 - Use `-v` to mount the screenshots path into your current directory.
 
 ```shell
-% docker run -ti --rm -v ${PWD}/screenshots:/app/screenshots noip-renewer:latest -u "<YOUR_EMAIL>" -p "<YOUR_PASSWORD>" -s "<YOUR_TOTP_SECRET_KEY>"
+% docker run -ti --rm -v ${PWD}/screenshots:/app/screenshots noip-renewer:latest -u "<YOUR_EMAIL>" -p "<YOUR_PASSWORD>" -s "<YOUR_TOTP_SECRET>"
 ```
 
 ## As a cronjob
@@ -56,5 +59,5 @@ options:
 Add the following to your crontab, e.g. everyday 1AM:
 
 ```shell
-crontab -l | { cat; echo "0 1 * * * docker run -ti --rm -v ${PWD}/screenshots:/app/screenshots noip-renewer:latest -u '<YOUR_EMAIL>' -p '<YOUR_PASSWORD>' -s '<YOUR_TOTP_SECRET_KEY>'"; } | crontab -
+crontab -l | { cat; echo "0 1 * * * docker run -ti --rm -v ${PWD}/screenshots:/app/screenshots noip-renewer:latest -u '<YOUR_EMAIL>' -p '<YOUR_PASSWORD>' -s '<YOUR_TOTP_SECRET>'"; } | crontab -
 ```
