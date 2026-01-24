@@ -1,28 +1,20 @@
 import argparse
+import os
+import sys
 import logging
-import re
-import time
-from sys import stdout
 
-import pyotp
-from constants import HOST_URL, LOGIN_URL, SCREENSHOTS_PATH, USER_AGENT
+from constants import DYNAMIC_HOSTS_URL, LOGIN_URL, SCREENSHOTS_PATH, USER_AGENT
 from selenium import webdriver
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
-# Set up logging
 debug_enabled = False
-logger = logging.getLogger(__name__)
-
-logFormatter = logging.Formatter(
-    "%(name)-12s %(asctime)s %(levelname)-8s %(filename)s:%(funcName)s %(message)s"
-)
-consoleHandler = logging.StreamHandler(stdout)
-consoleHandler.setFormatter(logFormatter)
-logger.addHandler(consoleHandler)
+logger = logging.getLogger()
 
 
-class Robot:
+class NoIPRobot:
     def __init__(
         self,
         username: str,
@@ -37,7 +29,6 @@ class Robot:
         self.browser = self.init_browser()
 
     def init_browser(self, timeout: int = 90):
-        # Setup browser options
         options = webdriver.ChromeOptions()
         options.add_argument("disable-features=VizDisplayCompositor")
         options.add_argument("headless")
@@ -46,7 +37,16 @@ class Robot:
         options.add_argument(f"user-agent={USER_AGENT}")
         if self.https_proxy:
             options.add_argument("proxy-server=" + self.https_proxy)
-        browser = webdriver.Chrome(options=options)
+
+        # Fixing weird issue with linux/arm64 distros
+        IS_DOCKER = os.environ.get("IS_DOCKER", False)
+        if not IS_DOCKER:
+            browser = webdriver.Chrome(options=options)
+        else:
+            options.binary_location = "/usr/bin/chromium"
+            service = webdriver.ChromeService(executable_path="/usr/bin/chromedriver")
+            browser = webdriver.Chrome(service=service, options=options)
+
         browser.set_page_load_timeout(timeout)
         return browser
 
@@ -76,15 +76,35 @@ class Robot:
             logger.error(f"An error has occurred while inserting the password: {e}")
             raise Exception("Failed while inserting the password")
 
+        login_button = WebDriverWait(self.browser, 10).until(
+            EC.element_to_be_clickable((By.ID, "clogs-captcha-button"))
+        )
+
         try:
-            self.browser.find_element(By.ID, "clogs-captcha-button").click()
+            # Hack since NO-IP folks are not stupid and triggers some JS on headless mode
+            self.browser.execute_script("arguments[0].click();", login_button)
         except Exception as e:
             logger.error(f"Error while logging in: {e}")
             raise Exception("Failed while trying to logging in")
 
-        otp = pyotp.TOTP(self.totp_secret).now()
+        # Use Priv Key to generate the TOTP Secret
+        if not self.totp_secret.isdigit():
+            import pyotp
+
+            otp = pyotp.TOTP(self.totp_secret).now()
+        # Passing the 6-digit TOTP
+        else:
+            if not len(self.totp_secret) == 6:
+                logger.error("The TOTP Secret must be a 6-digit number!")
+                sys.exit(1)
+            otp = self.totp_secret
 
         # Fills in 6 pin OTP code
+        WebDriverWait(self.browser, 10).until(
+            EC.presence_of_all_elements_located(
+                (By.XPATH, '//*[@id="totp-input"]/input')
+            )
+        )
         try:
             for pos in range(6):
                 otp_elem = self.browser.find_element(
@@ -96,94 +116,53 @@ class Robot:
             logger.error(f"Error while filling the 6-digit OTP code: {e}")
             raise Exception("Failed while trying to logging in")
 
+        totp_button = WebDriverWait(self.browser, 10).until(
+            EC.element_to_be_clickable((By.XPATH, "//input[@value='Verify']"))
+        )
         try:
-            self.browser.find_element(By.XPATH, "//input[@value='Verify']").click()
+            totp_button.click()
         except Exception as e:
             logger.error(f"Error while verifying 6-digit OTP code: {e}")
             raise Exception("Failed while trying to logging in")
 
         if debug_enabled:
-            time.sleep(1)
             self.browser.save_screenshot(f"{SCREENSHOTS_PATH}/debug2.png")
 
-    def open_hosts_page(self):
-        logger.info(f"Opening {HOST_URL}...")
+    def look_for_warn_msg_and_confirm(self) -> None:
+        logger.info("Checking for expired hosts..")
+        expire_elem = None
+        # TODO: This clicks on the first host marked to expire
+        # If you have > 1 host you'd have to run the script again
+        # Maybe add a loop or something, anyways you only have 3 free-hosts per account so no big deal
         try:
-            self.browser.get(HOST_URL)
-        except TimeoutException as e:
-            logger.error(f"The process has timed out: {e}")
-            self.browser.save_screenshot(f"{SCREENSHOTS_PATH}/timeout.png")
+            expire_elem = self.browser.find_element(
+                By.XPATH, "//div[contains(@id, 'expiration-banner-hostname-')]"
+            )
+        # This is expected. No hosts are marked for renewal
+        except NoSuchElementException:
+            logger.info("No expiring hosts found. You are all set!")
+            return
+
+        if debug_enabled:
+            self.browser.save_screenshot(f"{SCREENSHOTS_PATH}/hosts-to-expire.png")
+        host_name = expire_elem.get_attribute("id").split("-")[-1]
+        logger.info(f"Expiring host {host_name} found. Proceeding to renewal")
+        confirmation_button = self.browser.find_element(
+            By.XPATH,
+            "//button[contains(@hx-get, 'https://my.noip.com/ajax/host/')]",
+        )
+        confirmation_button.click()
 
     def update_hosts(self):
-        self.open_hosts_page()
-        time.sleep(1)
-
-        hosts = self.get_hosts()
-        for host in hosts:
-            host_name = self.get_host_link(host).text
-            expiration_days = self.get_host_expiration_days(host)
-            logger.info(f"expiration days: {expiration_days}")
-            if expiration_days < 7:
-                logger.info(f"Host {host_name} is about to expire, confirming host..")
-                host_button = self.get_host_button(host)
-                self.update_host(host_button, host_name)
-                logger.info(f"Host confirmed: {host_name}")
-            else:
-                logger.info(
-                    f"Host {host_name} is yet not due, remaining days to expire: {expiration_days}"
-                )
-            self.browser.save_screenshot(f"{SCREENSHOTS_PATH}/{host_name}-results.png")
-
-    def update_host(self, host_button, host_name):
-        logger.info(f"Updating {host_name}")
-        host_button.click()
-        time.sleep(1)
-        intervention = False
-        try:
-            intervention = (
-                self.browser.find_element(By.XPATH, "//h2[@class='big']")[0].text
-                == "Upgrade Now"
+        self.browser.get(DYNAMIC_HOSTS_URL)
+        dynamic_dns_list = WebDriverWait(self.browser, 10).until(
+            EC.presence_of_element_located(
+                (By.XPATH, "//a[text()='Dynamic DNS Hostnames']")
             )
-        except Exception as e:
-            logger.error(f"An error has occurred: {e}")
-            pass
-
-        if intervention:
-            raise Exception("Manual intervention required. Upgrade text detected.")
-        self.browser.save_screenshot(f"{SCREENSHOTS_PATH}/{host_name}_success.png")
-
-    @staticmethod
-    def get_host_expiration_days(host):
-        try:
-            host_remaining_days = host.find_element(
-                By.XPATH,
-                ".//a[@class='no-link-style popover-info popover-colorful popover-dark']",
-            ).get_attribute("data-original-title")
-        except Exception:
-            logger.info("Seems like the host has already expired")
-            # Host is expired: Return 0 (remaining days)
-            return 0
-        regex_match = re.search("\\d+", host_remaining_days)
-        if regex_match is None:
-            raise Exception("Expiration days label does not match the expected pattern")
-        expiration_days = int(regex_match.group(0))
-        return expiration_days
-
-    @staticmethod
-    def get_host_link(host):
-        return host.find_element(By.XPATH, ".//a[@class='link-info cursor-pointer']")
-
-    @staticmethod
-    def get_host_button(host):
-        return host.find_element(
-            By.XPATH, ".//following-sibling::td[4]/button[contains(@class, 'btn')]"
         )
-
-    def get_hosts(self) -> list:
-        host_tds = self.browser.find_elements(By.XPATH, '//td[@data-title="Host"]')
-        if len(host_tds) == 0:
-            raise Exception("No hosts or host table rows not found")
-        return host_tds
+        dynamic_dns_list.click()
+        self.browser.save_screenshot(f"{SCREENSHOTS_PATH}/hosts-to-expire.png")
+        self.look_for_warn_msg_and_confirm()
 
     def run(self) -> int:
         return_code = 0
@@ -191,7 +170,7 @@ class Robot:
             self.login()
             self.update_hosts()
         except Exception as e:
-            logger.error(f"An error has ocurred while Robot was running: {e}")
+            logger.error(f"An error has ocurred was running: {e}")
             self.browser.save_screenshot(f"{SCREENSHOTS_PATH}/exception.png")
             return_code = 1
         finally:
@@ -202,19 +181,33 @@ class Robot:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="noip DDNS auto renewer",
-        description="Renews each of the no-ip DDNS hosts that are below 7 days to expire period",
     )
-    parser.add_argument("-u", "--username", required=True)
+    parser.add_argument(
+        "-u",
+        "--username",
+        required=True,
+    )
     parser.add_argument("-p", "--password", required=True)
-    parser.add_argument("-s", "--totp-secret", required=True)
-    parser.add_argument("-t", "--https-proxy", required=False)
+    parser.add_argument(
+        "-s",
+        "--totp-secret",
+        required=True,
+    )
+    parser.add_argument(
+        "-t",
+        "--https-proxy",
+        required=False,
+    )
     parser.add_argument("-d", "--debug", type=bool, default=False, required=False)
     args = vars(parser.parse_args())
 
-    # Set debug level
-    logger.setLevel(logging.DEBUG if args["debug"] else logging.ERROR)
+    logging.basicConfig(
+        format="%(levelname)s: %(message)s",
+        encoding="utf-8",
+        level=logging.DEBUG if args["debug"] else logging.INFO,
+    )
 
-    Robot(
+    NoIPRobot(
         args["username"],
         args["password"],
         args["totp_secret"],

@@ -1,15 +1,16 @@
 FROM python:3.12-alpine
 
-WORKDIR /app
+ENV IS_DOCKER true
 
-COPY requirements.txt .
+WORKDIR /app
 
 RUN apk update && \
     apk upgrade --no-cache && \
     apk add --no-cache chromium chromium-chromedriver && \
-    rm -rf /var/cache/apk/* && \
-    pip3 install --no-cache-dir -r requirements.txt
+    rm -rf /var/cache/apk/*
 
-COPY noip-renew.py constants.py .
+COPY . .
 
-ENTRYPOINT ["python3", "noip-renew.py"]
+RUN pip3 install --no-cache-dir -e .
+
+ENTRYPOINT ["python", "noip-renew.py"]

@@ -1,2 +1,2 @@
 pyotp==2.9.0
-selenium==4.21.0
+selenium==4.40.0
