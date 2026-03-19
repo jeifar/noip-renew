@@ -33,7 +33,8 @@ class NoIPRobot:
         options.add_argument("disable-features=VizDisplayCompositor")
         options.add_argument("headless")
         options.add_argument("no-sandbox")
-        options.add_argument("window-size=1200x800")
+        options.add_argument("window-size=1920x1080")
+        options.add_argument("start-maximized")
         options.add_argument(f"user-agent={USER_AGENT}")
         if self.https_proxy:
             options.add_argument("proxy-server=" + self.https_proxy)
@@ -154,14 +155,27 @@ class NoIPRobot:
         confirmation_button.click()
 
     def update_hosts(self):
-        dynamic_dns_list = WebDriverWait(self.browser, 10).until(
-            EC.presence_of_element_located(
-                (By.XPATH, "//a[text()='Dynamic DNS Hostnames']")
+        try:
+            logger.info("Looking for expired DNS Records")
+            WebDriverWait(self.browser, 10).until(
+                EC.presence_of_element_located(
+                    (
+                        By.XPATH,
+                        "//ul/li/a[@href='#']//span[text()='DDNS & Remote Access']",
+                    )
+                )
+            ).click()
+            dynamic_dns_list = WebDriverWait(self.browser, 10).until(
+                EC.element_to_be_clickable(
+                    (By.XPATH, "//a[@href='/dns/records']//span[text()='DNS Records']")
+                )
             )
-        )
-        dynamic_dns_list.click()
-        self.browser.save_screenshot(f"{SCREENSHOTS_PATH}/hosts-to-expire.png")
-        self.look_for_warn_msg_and_confirm()
+            dynamic_dns_list.click()
+            self.browser.save_screenshot(f"{SCREENSHOTS_PATH}/hosts-to-expire.png")
+            self.look_for_warn_msg_and_confirm()
+        except Exception as e:
+            logger.error(f"Error while looking up DNS records: {e}")
+            raise
 
     def run(self) -> int:
         return_code = 0
@@ -169,7 +183,7 @@ class NoIPRobot:
             self.login()
             self.update_hosts()
         except Exception as e:
-            logger.error(f"An error has ocurred was running: {e}")
+            logger.error(f"An error has ocurred while running: {e}")
             self.browser.save_screenshot(f"{SCREENSHOTS_PATH}/exception.png")
             return_code = 1
         finally:
