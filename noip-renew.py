@@ -146,13 +146,17 @@ class NoIPRobot:
 
         if debug_enabled:
             self.browser.save_screenshot(f"{SCREENSHOTS_PATH}/hosts-to-expire.png")
-        host_name = expire_elem.get_attribute("id").split("-")[-1]
-        logger.info(f"Expiring host {host_name} found. Proceeding to renewal")
-        confirmation_button = self.browser.find_element(
-            By.XPATH,
-            "//button[contains(@hx-get, 'https://my.noip.com/ajax/host/')]",
-        )
-        confirmation_button.click()
+        try:
+            host_name = expire_elem.get_attribute("id").split("-")[-1]
+            logger.info(f"Expiring host {host_name} found. Proceeding to renewal")
+            confirmation_button = self.browser.find_element(
+                By.XPATH,
+                "//button[contains(@hx-get, 'https://my.noip.com/ajax/host/')]",
+            )
+            confirmation_button.click()
+            logger.info(f"Host {host_name} successfully renewed!")
+        except Exception as e:
+            logger.error(f"Error while trying to renew host {host_name}: {e}")
 
     def update_hosts(self):
         try:
