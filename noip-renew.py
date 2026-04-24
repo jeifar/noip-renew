@@ -2,8 +2,9 @@ import argparse
 import os
 import sys
 import logging
-
-from constants import LOGIN_URL, SCREENSHOTS_PATH, USER_AGENT
+from typing import Optional
+from secrets import SecretStore
+from constants import *
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
@@ -17,14 +18,18 @@ logger = logging.getLogger()
 class NoIPRobot:
     def __init__(
         self,
-        username: str,
-        password: str,
-        totp_secret: str,
-        https_proxy: str = None,
+        username: Optional[str],
+        password: Optional[str],
+        totp_secret: Optional[str],
+        vault_token: Optional[str],
+        vault_path: Optional[str],
+        https_proxy: Optional[str],
+        vault_url: str = VAULT_ADDR,
     ):
         self.username = username
-        self.password = password
-        self.totp_secret = totp_secret
+        self.secret_store = SecretStore(
+            password, totp_secret, vault_token, vault_path, vault_url
+        )
         self.https_proxy = https_proxy
         self.browser = self.init_browser()
 
@@ -72,7 +77,7 @@ class NoIPRobot:
         # Fill in the password form
         ele_pwd = self.browser.find_element("name", "password")
         try:
-            ele_pwd.send_keys(self.password)
+            ele_pwd.send_keys(self.secret_store.get_password())
         except Exception as e:
             logger.error(f"An error has occurred while inserting the password: {e}")
             raise Exception("Failed while inserting the password")
@@ -89,16 +94,7 @@ class NoIPRobot:
             raise Exception("Failed while trying to logging in")
 
         # Use Priv Key to generate the TOTP Secret
-        if not self.totp_secret.isdigit():
-            import pyotp
-
-            otp = pyotp.TOTP(self.totp_secret).now()
-        # Passing the 6-digit TOTP
-        else:
-            if not len(self.totp_secret) == 6:
-                logger.error("The TOTP Secret must be a 6-digit number!")
-                sys.exit(1)
-            otp = self.totp_secret
+        otp = self.secret_store.get_token()
 
         # Fills in 6 pin OTP code
         WebDriverWait(self.browser, 10).until(
@@ -204,11 +200,27 @@ if __name__ == "__main__":
         "--username",
         required=True,
     )
-    parser.add_argument("-p", "--password", required=True)
+    parser.add_argument("-p", "--password", required=False)
     parser.add_argument(
         "-s",
         "--totp-secret",
-        required=True,
+        required=False,
+    )
+    parser.add_argument(
+        "-vu",
+        "--vault-url",
+        required=False,
+        default="http://127.0.0.1:8200",
+    )
+    parser.add_argument(
+        "-vt",
+        "--vault-token",
+        required=False,
+    )
+    parser.add_argument(
+        "-vp",
+        "--vault-path",
+        required=False,
     )
     parser.add_argument(
         "-t",
@@ -224,9 +236,22 @@ if __name__ == "__main__":
         level=logging.DEBUG if args["debug"] else logging.INFO,
     )
 
+    print(args)
+
+    if not (args["password"] and args["totp_secret"]) and not (
+        args["vault_token"] and args["vault_path"]
+    ):
+        logger.error(
+            "At least one of password and totp secret or vault token argument is required"
+        )
+        sys.exit(1)
+
     NoIPRobot(
         args["username"],
         args["password"],
         args["totp_secret"],
+        args["vault_token"],
+        args["vault_path"],
         args["https_proxy"],
+        args["vault_url"],
     ).run()
