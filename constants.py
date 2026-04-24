@@ -3,3 +3,4 @@ USER_AGENT = (
 )
 LOGIN_URL = "https://www.noip.com/login"
 SCREENSHOTS_PATH = "screenshots"
+VAULT_ADDR = "http://127.0.0.1:8200"

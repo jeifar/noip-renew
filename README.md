@@ -22,21 +22,24 @@ Based originally in [noip-renew](https://github.com/loblab/noip-renew) and made 
 3. Run the command:
 
 ```shell
-python noip-renew.py  -h
-usage: noip DDNS auto renewer [-h] -u USERNAME -p PASSWORD -s TOTP_SECRET [-t HTTPS_PROXY] [-d DEBUG]
+% python noip-renew.py --help
+usage: noip DDNS auto renewer [-h] -u USERNAME [-p PASSWORD] [-s TOTP_SECRET] [-vu VAULT_URL] [-vt VAULT_TOKEN] [-vp VAULT_PATH] [-t HTTPS_PROXY] [-d DEBUG]
 
 options:
   -h, --help            show this help message and exit
   -u, --username USERNAME
   -p, --password PASSWORD
   -s, --totp-secret TOTP_SECRET
+  -vu, --vault-url VAULT_URL
+  -vt, --vault-token VAULT_TOKEN
+  -vp, --vault-path VAULT_PATH
   -t, --https-proxy HTTPS_PROXY
   -d, --debug DEBUG
 ```
 
 ### Note
 
-You can use either a TOTP secret (6-digit number) or the PRIV Key from the 2FA
+You can use either pass the password and TOTP Private Key or use an [OpenBAO](https://openbao.org) secret path which must be `/v1/secret/data/{YOUR_PATH}`
 
 ## Usage with Docker
 
@@ -51,7 +54,7 @@ You can use either a TOTP secret (6-digit number) or the PRIV Key from the 2FA
 - Use `-v` to mount the screenshots path into your current directory.
 
 ```shell
-% docker run -ti --rm -v ${PWD}/screenshots:/app/screenshots noip-renewer:latest -u "<YOUR_EMAIL>" -p "<YOUR_PASSWORD>" -s "<YOUR_TOTP_SECRET>"
+% docker run -ti --rm -v ${PWD}/screenshots:/app/screenshots noip-renewer:latest -u "<YOUR_EMAIL>" -p "<YOUR_PASSWORD>" -s "<YOUR_TOTP_PRIV_KEY>"
 ```
 
 ## As a cronjob
@@ -59,5 +62,5 @@ You can use either a TOTP secret (6-digit number) or the PRIV Key from the 2FA
 Add the following to your crontab, e.g. everyday 1AM:
 
 ```shell
-crontab -l | { cat; echo "0 1 * * * docker run -ti --rm -v ${PWD}/screenshots:/app/screenshots noip-renewer:latest -u '<YOUR_EMAIL>' -p '<YOUR_PASSWORD>' -s '<YOUR_TOTP_SECRET>'"; } | crontab -
+crontab -l | { cat; echo "0 1 * * * docker run -ti --rm -v ${PWD}/screenshots:/app/screenshots noip-renewer:latest -u '<YOUR_EMAIL>' -p '<YOUR_PASSWORD>' -s '<YOUR_TOTP_PRIV_KEY>'"; } | crontab -
 ```
