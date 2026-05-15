@@ -236,8 +236,6 @@ if __name__ == "__main__":
         level=logging.DEBUG if args["debug"] else logging.INFO,
     )
 
-    print(args)
-
     if not (args["password"] and args["totp_secret"]) and not (
         args["vault_token"] and args["vault_path"]
     ):
