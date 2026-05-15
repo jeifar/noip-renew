@@ -8,5 +8,5 @@ authors = [{ name = "Gattes", email = "gattes@tutamail.com" }]
 dependencies = [
   "hvac>=2.4.0",
   "pyotp>=2.9.0",
-  "selenium>=4.40.0",
+  "selenium>=4.43.0",
 ]
