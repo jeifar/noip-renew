@@ -1,15 +1,18 @@
+#!/usr/bin/env python
+
 import argparse
+import logging
 import os
 import sys
-import logging
-from typing import Optional
 from secrets import SecretStore
-from constants import *
+
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
+
+from constants import *
 
 debug_enabled = False
 logger = logging.getLogger()
@@ -18,12 +21,12 @@ logger = logging.getLogger()
 class NoIPRobot:
     def __init__(
         self,
-        username: Optional[str],
-        password: Optional[str],
-        totp_secret: Optional[str],
-        vault_token: Optional[str],
-        vault_path: Optional[str],
-        https_proxy: Optional[str],
+        username: str | None,
+        password: str | None,
+        totp_secret: str | None,
+        vault_token: str | None,
+        vault_path: str | None,
+        https_proxy: str | None,
         vault_url: str = VAULT_ADDR,
     ):
         self.username = username
@@ -35,23 +38,31 @@ class NoIPRobot:
 
     def init_browser(self, timeout: int = 90):
         options = webdriver.ChromeOptions()
-        options.add_argument("disable-features=VizDisplayCompositor")
-        options.add_argument("headless")
-        options.add_argument("no-sandbox")
-        options.add_argument("window-size=1920x1080")
-        options.add_argument("start-maximized")
-        options.add_argument(f"user-agent={USER_AGENT}")
+        chrome_options = (
+            "disable-features=VizDisplayCompositor",
+            "no-sandbox",
+            "window-size=1920x1080",
+            "start-maximized",
+            f"user-agent={USER_AGENT}",
+            "no-default-browser-check",
+            "no-first-run",
+            "allow-file-access-from-files",
+            "headless=new",
+        )
+        for option in chrome_options:
+            options.add_argument(option)
         if self.https_proxy:
             options.add_argument("proxy-server=" + self.https_proxy)
-
-        # Fixing weird issue with linux/arm64 distros
-        IS_DOCKER = os.environ.get("IS_DOCKER", False)
-        if not IS_DOCKER:
-            browser = webdriver.Chrome(options=options)
-        else:
+        if os.environ.get("IS_DOCKER"):
             options.binary_location = "/usr/bin/chromium"
-            service = webdriver.ChromeService(executable_path="/usr/bin/chromedriver")
-            browser = webdriver.Chrome(service=service, options=options)
+            browser = webdriver.Chrome(
+                service=webdriver.ChromeService(
+                    executable_path="/usr/bin/chromedriver"
+                ),
+                options=options,
+            )
+        else:
+            browser = webdriver.Chrome(options=options)
 
         browser.set_page_load_timeout(timeout)
         return browser
@@ -227,7 +238,9 @@ if __name__ == "__main__":
         "--https-proxy",
         required=False,
     )
-    parser.add_argument("-d", "--debug", type=bool, default=False, required=False)
+    parser.add_argument(
+        "-d", "--debug", action="store_true", default=False, required=False
+    )
     args = vars(parser.parse_args())
 
     logging.basicConfig(

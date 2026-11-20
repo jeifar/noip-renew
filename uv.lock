@@ -164,7 +164,7 @@ dependencies = [
 requires-dist = [
     { name = "hvac", specifier = ">=2.4.0" },
     { name = "pyotp", specifier = ">=2.9.0" },
-    { name = "selenium", specifier = ">=4.40.0" },
+    { name = "selenium", specifier = ">=4.43.0" },
 ]
 
 [[package]]
